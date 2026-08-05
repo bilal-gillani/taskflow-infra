@@ -1,0 +1,142 @@
+name: Provision VMs — Run Ansible
+
+# ---------------------------------------------------------------------------
+# Manual trigger workflow — click "Run workflow" in GitHub Actions UI
+# to run Ansible against your existing Azure VMs.
+#
+# Use this for:
+#   - First-time VM configuration after terraform apply
+#   - Re-running config after infra changes
+#   - Debugging / re-provisioning without pushing any code
+# ---------------------------------------------------------------------------
+
+on:
+  workflow_dispatch:
+    inputs:
+      playbook:
+        description: "Which playbook to run?"
+        required: true
+        default: "site.yml"
+        type: choice
+        options:
+          - site.yml          # Full setup: DB first, then App
+          - configure-db.yml  # DB VM only
+          - configure-app.yml # App VM only
+
+permissions:
+  id-token: write  # Required for OIDC login to Azure
+  contents: read
+
+jobs:
+  ansible-provision:
+    name: Run Ansible (${{ github.event.inputs.playbook }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout infra repository
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------
+      # 1. Authenticate to Azure via OIDC (no stored credentials)
+      # ------------------------------------------------------------------
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # ------------------------------------------------------------------
+      # 2. Get VM IPs from Terraform remote state
+      #    (Terraform reads from the Azure Storage backend we configured)
+      # ------------------------------------------------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+          terraform_wrapper: false
+
+      - name: Terraform Init (to access remote state)
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: Export VM IPs from Terraform outputs
+        id: tf_outputs
+        run: |
+          APP_IP=$(terraform output -raw app_vm_public_ip)
+          DB_IP=$(terraform output -raw db_vm_private_ip)
+          echo "app_ip=$APP_IP" >> $GITHUB_OUTPUT
+          echo "db_ip=$DB_IP"   >> $GITHUB_OUTPUT
+          echo "App VM IP: $APP_IP"
+          echo "DB VM IP:  $DB_IP"
+        working-directory: ./terraform
+
+      # ------------------------------------------------------------------
+      # 3. Install Ansible and required collections
+      # ------------------------------------------------------------------
+      - name: Install Ansible and collections
+        run: |
+          pip install --quiet ansible
+          ansible-galaxy collection install \
+            community.general \
+            community.mysql \
+            ansible.posix \
+            --quiet
+
+      # ------------------------------------------------------------------
+      # 4. Configure SSH access to VMs
+      # ------------------------------------------------------------------
+      - name: Write SSH private key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" > ~/.ssh/az-vm-ssh
+          chmod 600 ~/.ssh/az-vm-ssh
+          # Verify key is valid
+          ssh-keygen -l -f ~/.ssh/az-vm-ssh
+
+      - name: Wait for SSH on App VM to be ready
+        run: |
+          echo "Waiting for SSH on ${{ steps.tf_outputs.outputs.app_ip }}..."
+          for i in $(seq 1 20); do
+            if ssh -o StrictHostKeyChecking=no \
+                   -o ConnectTimeout=5 \
+                   -i ~/.ssh/az-vm-ssh \
+                   gillani@${{ steps.tf_outputs.outputs.app_ip }} \
+                   "echo ssh-ok" 2>/dev/null; then
+              echo "SSH is ready."
+              break
+            fi
+            echo "Attempt $i/20 — retrying in 15s..."
+            sleep 15
+          done
+
+      # ------------------------------------------------------------------
+      # 5. Build Ansible inventory from Terraform outputs
+      #    (DB VM is private — reached via App VM as SSH jump host)
+      # ------------------------------------------------------------------
+      - name: Write Ansible inventory
+        run: |
+          APP_IP="${{ steps.tf_outputs.outputs.app_ip }}"
+          DB_IP="${{ steps.tf_outputs.outputs.db_ip }}"
+
+          cat > ./ansible/inventory/hosts.ini << EOF
+          [app_servers]
+          $APP_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
+          [db_servers]
+          $DB_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=gillani@$APP_IP -i ~/.ssh/az-vm-ssh'
+          EOF
+
+          echo "Inventory written:"
+          cat ./ansible/inventory/hosts.ini
+
+      # ------------------------------------------------------------------
+      # 6. Run the selected Ansible playbook
+      # ------------------------------------------------------------------
+      - name: Run Ansible playbook — ${{ github.event.inputs.playbook }}
+        run: |
+          ansible-playbook \
+            -i inventory/hosts.ini \
+            playbooks/${{ github.event.inputs.playbook }} \
+            -v
+        working-directory: ./ansible
