@@ -5,7 +5,7 @@
 # ---------------------------------------------------------------------------
 
 # --- App config ---
-app_repo_url: "https://github.com/bilal-gillani/taskflow-app.git"
+app_repo_url: "https://github.com/bilal-gillani/taskflow-cicd.git"  # NEW repo — separate from previous demo
 app_repo_dest: "/var/www/html/taskflow"
 app_user: "www-data"
 
