@@ -1,0 +1,12 @@
+---
+# configure-db.yml — Runs the DB server configuration playbook
+# Usage: ansible-playbook -i inventory/dynamic_inventory.py playbooks/configure-db.yml
+
+- name: Configure DB VM
+  hosts: db_servers
+  become: true
+  gather_facts: true
+
+  roles:
+    - common
+    - db_server

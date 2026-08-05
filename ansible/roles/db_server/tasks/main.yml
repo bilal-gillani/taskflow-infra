@@ -1,0 +1,73 @@
+---
+# ---------------------------------------------------------------------------
+# db_server role — configures the DB VM
+# Handles: MySQL install, bind-address, DB/user creation
+# Secrets: db_password fetched from Azure Key Vault at runtime
+# ---------------------------------------------------------------------------
+
+# --- Fetch secret from Key Vault ---
+- name: Fetch DB password from Azure Key Vault
+  ansible.builtin.command:
+    cmd: >
+      az keyvault secret show
+      --vault-name kv-secrets-1029
+      --name {{ kv_secret_name_db_pass }}
+      --query value -o tsv
+  register: kv_secret_output
+  changed_when: false
+  no_log: true   # Never print the secret to logs
+
+- name: Set db_password fact
+  ansible.builtin.set_fact:
+    db_password: "{{ kv_secret_output.stdout | trim }}"
+  no_log: true
+
+# --- Install MySQL ---
+- name: Install MySQL server
+  ansible.builtin.apt:
+    name:
+      - mysql-server
+      - python3-mysqldb   # Required by Ansible's mysql_* modules
+    state: present
+
+- name: Ensure MySQL is started and enabled
+  ansible.builtin.service:
+    name: mysql
+    state: started
+    enabled: yes
+
+# --- Configure MySQL to listen on all interfaces ---
+# (DB VM is in a private subnet — only reachable from app subnet via NSG)
+- name: Set MySQL bind-address to 0.0.0.0
+  ansible.builtin.lineinfile:
+    path: /etc/mysql/mysql.conf.d/mysqld.cnf
+    regexp: '^bind-address'
+    line: 'bind-address = 0.0.0.0'
+    backup: yes
+  notify: Restart MySQL
+
+- name: Flush handlers to apply bind-address change before DB tasks
+  ansible.builtin.meta: flush_handlers
+
+# --- Create database ---
+- name: Create taskflow database
+  community.mysql.mysql_db:
+    name: "{{ db_name }}"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+# --- Create application DB user ---
+- name: Create taskflow DB user with remote access
+  community.mysql.mysql_user:
+    name: "{{ db_user }}"
+    password: "{{ db_password }}"
+    priv: "{{ db_name }}.*:ALL"
+    host: "%"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+  no_log: true
+
+- name: Flush MySQL privileges
+  community.mysql.mysql_query:
+    query: "FLUSH PRIVILEGES"
+    login_unix_socket: /var/run/mysqld/mysqld.sock

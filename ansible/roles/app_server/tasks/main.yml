@@ -1,0 +1,115 @@
+---
+# ---------------------------------------------------------------------------
+# app_server role — configures the App VM
+# Handles: Apache + PHP install, git clone, config.php generation, schema import
+# Secrets: db_password fetched from Azure Key Vault at runtime
+# ---------------------------------------------------------------------------
+
+# --- Fetch secrets from Key Vault ---
+- name: Fetch DB password from Azure Key Vault
+  ansible.builtin.command:
+    cmd: >
+      az keyvault secret show
+      --vault-name kv-secrets-1029
+      --name {{ kv_secret_name_db_pass }}
+      --query value -o tsv
+  register: kv_secret_output
+  changed_when: false
+  no_log: true
+
+- name: Set db_password fact
+  ansible.builtin.set_fact:
+    db_password: "{{ kv_secret_output.stdout | trim }}"
+  no_log: true
+
+# --- Install Apache, PHP, and MySQL client ---
+- name: Install Apache, PHP, and MySQL client
+  ansible.builtin.apt:
+    name:
+      - apache2
+      - php
+      - php-mysql
+      - php-mbstring
+      - php-xml
+      - libapache2-mod-php
+      - mysql-client
+      - git
+    state: present
+
+- name: Enable Apache rewrite module
+  community.general.apache2_module:
+    name: rewrite
+    state: present
+  notify: Restart Apache
+
+- name: Ensure Apache is started and enabled
+  ansible.builtin.service:
+    name: apache2
+    state: started
+    enabled: yes
+
+# --- Deploy application code from GitHub ---
+- name: Clone or update app repo from GitHub
+  ansible.builtin.git:
+    repo: "{{ app_repo_url }}"
+    dest: "{{ app_repo_dest }}"
+    version: main
+    force: yes   # Always sync to latest main — safe because this is idempotent
+  become_user: root
+
+# --- Add GitHub Actions deploy public key to authorized_keys ---
+# This allows the deploy-app.yml workflow to SSH into this VM.
+# Set github_deploy_public_key in group_vars/all.yml or pass via --extra-vars.
+- name: Add GitHub Actions deploy public key to authorized_keys
+  ansible.posix.authorized_key:
+    user: "{{ ansible_user }}"
+    state: present
+    key: "{{ github_deploy_public_key }}"
+  when: github_deploy_public_key is defined and github_deploy_public_key | length > 0
+
+- name: Set app directory ownership
+  ansible.builtin.file:
+    path: "{{ app_repo_dest }}"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    recurse: yes
+
+# --- Generate config.php from template (injects db_host + secrets) ---
+- name: Get DB VM private IP from hostvars
+  ansible.builtin.set_fact:
+    db_host: "{{ hostvars[groups['db_servers'][0]]['ansible_host'] }}"
+
+- name: Deploy config.php from Jinja2 template
+  ansible.builtin.template:
+    src: config.php.j2
+    dest: "{{ app_repo_dest }}/config.php"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0640"
+  no_log: true   # Template contains db_password — suppress from logs
+  notify: Restart Apache
+
+# --- Import DB schema (idempotent — schema.sql uses IF NOT EXISTS) ---
+- name: Wait for MySQL to be reachable from app VM
+  ansible.builtin.wait_for:
+    host: "{{ db_host }}"
+    port: 3306
+    timeout: 120
+    delay: 5
+
+- name: Import database schema
+  ansible.builtin.shell: >
+    mysql -h {{ db_host }}
+          -u {{ db_user }}
+          -p{{ db_password }}
+          {{ db_name }} < {{ app_repo_dest }}/sql/schema.sql
+  args:
+    creates: /var/log/taskflow-schema-imported.flag   # Only run once
+  register: schema_import
+  no_log: true
+
+- name: Mark schema as imported
+  ansible.builtin.file:
+    path: /var/log/taskflow-schema-imported.flag
+    state: touch
+  when: schema_import.changed

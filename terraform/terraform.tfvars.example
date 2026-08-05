@@ -1,0 +1,67 @@
+# terraform.tfvars.example
+# Copy this to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit real values.
+
+tenant_id          = "YOUR_AZURE_TENANT_ID"
+subscription_id    = "YOUR_AZURE_SUBSCRIPTION_ID"
+environment        = "dev"
+location           = "centralindia"
+vnet_address_space = ["10.2.0.0/16"]
+
+subnets = {
+  app = { address_prefixes = ["10.2.1.0/24"] }
+  db  = { address_prefixes = ["10.2.2.0/24"] }
+}
+
+nsg_rules_app = [
+  {
+    name                       = "allow-ssh"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  },
+  {
+    name                       = "allow-http"
+    priority                   = 101
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+]
+
+nsg_rules_db = [
+  {
+    name                       = "allow-ssh-from-app-subnet"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "10.2.1.0/24"
+    destination_address_prefix = "*"
+  },
+  {
+    name                       = "allow-mysql-from-app-subnet"
+    priority                   = 101
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "3306"
+    source_address_prefix      = "10.2.1.0/24"
+    destination_address_prefix = "*"
+  }
+]
+
+vm_size        = "Standard_B2s"
+admin_username = "YOUR_USERNAME"

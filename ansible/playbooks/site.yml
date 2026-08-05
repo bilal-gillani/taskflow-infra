@@ -1,0 +1,23 @@
+---
+# site.yml — Master playbook that configures ALL VMs in the correct order
+# DB must be configured before App (app schema import needs MySQL running)
+#
+# Usage: ansible-playbook -i inventory/dynamic_inventory.py playbooks/site.yml
+
+- name: Configure DB VM first
+  hosts: db_servers
+  become: true
+  gather_facts: true
+
+  roles:
+    - common
+    - db_server
+
+- name: Configure App VM (depends on DB being ready)
+  hosts: app_servers
+  become: true
+  gather_facts: true
+
+  roles:
+    - common
+    - app_server

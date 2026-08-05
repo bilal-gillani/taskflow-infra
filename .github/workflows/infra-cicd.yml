@@ -1,0 +1,213 @@
+name: Infrastructure CI/CD — Terraform + Ansible
+
+# ---------------------------------------------------------------------------
+# Triggers:
+#   Pull Request → runs fmt check, validate, plan (posts plan as PR comment)
+#   Push to main  → runs apply, then runs Ansible to configure VMs
+# ---------------------------------------------------------------------------
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform/**"
+      - "ansible/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "terraform/**"
+      - "ansible/**"
+
+permissions:
+  id-token: write # Required for OIDC authentication to Azure
+  contents: read
+  pull-requests: write # Required to post plan as PR comment
+
+env:
+  TF_WORKING_DIR: ./terraform
+  ANSIBLE_WORKING_DIR: ./ansible
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Job 1: Terraform Plan (runs on every PR)
+  # -------------------------------------------------------------------------
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to Azure via OIDC (no stored credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        continue-on-error: true
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -no-color -out=tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        continue-on-error: true
+
+      # Post the plan output as a PR comment so reviewers can see what changes
+      - name: Post Plan as PR Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Terraform Plan')
+            );
+            const output = `## Terraform Plan 📋
+            #### Format 🖌 \`${{ steps.fmt.outcome }}\`
+            #### Validate ✅ \`${{ steps.validate.outcome }}\`
+            #### Plan 📖 \`${{ steps.plan.outcome }}\`
+
+            <details><summary>Show Plan</summary>
+
+            \`\`\`hcl
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+
+            </details>
+
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: output,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: output,
+              });
+            }
+
+  # -------------------------------------------------------------------------
+  # Job 2: Terraform Apply (runs on merge to main)
+  # -------------------------------------------------------------------------
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production # Requires manual approval gate in GitHub Environments
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+          terraform_wrapper: false # Disable wrapper so outputs are clean
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      # Capture outputs for Ansible step
+      - name: Export Terraform outputs
+        id: tf_outputs
+        run: |
+          APP_IP=$(terraform output -raw app_vm_public_ip)
+          DB_IP=$(terraform output -raw db_vm_private_ip)
+          echo "app_ip=$APP_IP" >> $GITHUB_OUTPUT
+          echo "db_ip=$DB_IP"   >> $GITHUB_OUTPUT
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      # -----------------------------------------------------------------------
+      # Job 3: Run Ansible (inline in apply job — VM IPs available as outputs)
+      # -----------------------------------------------------------------------
+      - name: Install Ansible and Azure collection
+        run: |
+          pip install ansible
+          ansible-galaxy collection install community.general community.mysql azure.azcollection
+
+      - name: Write SSH private key for Ansible
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" > ~/.ssh/az-vm-ssh
+          chmod 600 ~/.ssh/az-vm-ssh
+
+      - name: Wait for SSH to be available on App VM
+        run: |
+          for i in $(seq 1 20); do
+            ssh -o StrictHostKeyChecking=no \
+                -o ConnectTimeout=5 \
+                -i ~/.ssh/az-vm-ssh \
+                gillani@${{ steps.tf_outputs.outputs.app_ip }} \
+                "echo ok" && break
+            echo "Waiting for SSH... attempt $i"
+            sleep 15
+          done
+
+      # Build a minimal inline inventory using the Terraform outputs
+      # (dynamic_inventory.py also works locally — this avoids Terraform CLI on the runner)
+      - name: Write Ansible inventory from Terraform outputs
+        run: |
+          APP_IP="${{ steps.tf_outputs.outputs.app_ip }}"
+          DB_IP="${{ steps.tf_outputs.outputs.db_ip }}"
+          cat > ${{ env.ANSIBLE_WORKING_DIR }}/inventory/hosts.ini << EOF
+          [app_servers]
+          $APP_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
+          [db_servers]
+          $DB_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=gillani@$APP_IP -i ~/.ssh/az-vm-ssh'
+          EOF
+
+      - name: Run Ansible site playbook
+        run: |
+          ansible-playbook \
+            -i inventory/hosts.ini \
+            playbooks/site.yml \
+            -v
+        working-directory: ${{ env.ANSIBLE_WORKING_DIR }}

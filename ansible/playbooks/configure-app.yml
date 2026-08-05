@@ -1,0 +1,12 @@
+---
+# configure-app.yml — Runs the App server configuration playbook
+# Usage: ansible-playbook -i inventory/dynamic_inventory.py playbooks/configure-app.yml
+
+- name: Configure App VM
+  hosts: app_servers
+  become: true
+  gather_facts: true
+
+  roles:
+    - common
+    - app_server
