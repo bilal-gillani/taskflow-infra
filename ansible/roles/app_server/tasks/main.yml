@@ -51,6 +51,10 @@
     enabled: yes
 
 # --- Deploy application code from GitHub ---
+- name: Mark app directory as safe for git
+  ansible.builtin.command: git config --global --add safe.directory "{{ app_repo_dest }}"
+  changed_when: false
+
 - name: Clone or update app repo from GitHub
   ansible.builtin.git:
     repo: "{{ app_repo_url }}"
