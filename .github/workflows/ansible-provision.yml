@@ -90,8 +90,7 @@ jobs:
           ansible-galaxy collection install \
             community.general \
             community.mysql \
-            ansible.posix \
-            --quiet
+            ansible.posix
 
       # ------------------------------------------------------------------
       # 4. Configure SSH access to VMs
