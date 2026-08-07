@@ -253,6 +253,19 @@ jobs:
             sleep 15
           done
 
+      - name: Wait for SSH to be available on DB VM
+        run: |
+          for i in $(seq 1 20); do
+            ssh -o StrictHostKeyChecking=no \
+                -o ProxyCommand="ssh -o StrictHostKeyChecking=no -W %h:%p -i ~/.ssh/az-vm-ssh gillani@${{ steps.tf_outputs.outputs.app_ip }}" \
+                -o ConnectTimeout=5 \
+                -i ~/.ssh/az-vm-ssh \
+                gillani@${{ steps.tf_outputs.outputs.db_ip }} \
+                "echo ok" && break
+            echo "Waiting for SSH on DB VM... attempt $i"
+            sleep 15
+          done
+
       # Build a minimal inline inventory using the Terraform outputs
       # (dynamic_inventory.py also works locally — this avoids Terraform CLI on the runner)
       - name: Write Ansible inventory from Terraform outputs
@@ -264,7 +277,7 @@ jobs:
           $APP_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o StrictHostKeyChecking=no'
 
           [db_servers]
-          $DB_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=gillani@$APP_IP -i ~/.ssh/az-vm-ssh'
+          $DB_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyCommand="ssh -o StrictHostKeyChecking=no -W %h:%p -i ~/.ssh/az-vm-ssh gillani@$APP_IP"'
           EOF
 
       - name: Run Ansible site playbook
