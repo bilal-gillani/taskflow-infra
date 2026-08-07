@@ -1,4 +1,4 @@
-name: Infrastructure CI/CD - Terraform + Ansible
+name: Infra CI/CD - Terraform + Ansible
 
 # ---------------------------------------------------------------------------
 # Triggers:
