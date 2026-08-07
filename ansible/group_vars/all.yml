@@ -13,6 +13,7 @@ app_user: "www-data"
 github_deploy_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICYR+IxNvQ0ssUtcLdvPK1zqLSTgg2ykV2CRgkvJcoAQ github-actions-deploy"
 
 # --- Azure Key Vault ---
+key_vault_name: "secrets-kv-1029" # ← change here only if KV name changes
 key_vault_uri: "https://secrets-kv-1029.vault.azure.net/"
 kv_secret_name_db_pass: "taskflow-db-pass"
 

@@ -10,7 +10,7 @@
   ansible.builtin.command:
     cmd: >
       az keyvault secret show
-      --vault-name secrets-kv-1029
+      --vault-name {{ key_vault_name }}
       --name {{ kv_secret_name_db_pass }}
       --query value -o tsv
   register: kv_secret_output
