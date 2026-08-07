@@ -233,7 +233,7 @@ jobs:
       - name: Install Ansible and Azure collection
         run: |
           pip install ansible
-          ansible-galaxy collection install community.general community.mysql azure.azcollection
+          ansible-galaxy collection install community.general ansible.mysql azure.azcollection
 
       - name: Write SSH private key for Ansible
         run: |
