@@ -89,7 +89,8 @@ jobs:
           pip install --quiet ansible
           ansible-galaxy collection install \
             community.general \
-            community.mysql \
+            ansible.mysql \
+            azure.azcollection \
             ansible.posix
 
       # ------------------------------------------------------------------
@@ -133,7 +134,7 @@ jobs:
           $APP_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o StrictHostKeyChecking=no'
 
           [db_servers]
-          $DB_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyJump=gillani@$APP_IP -i ~/.ssh/az-vm-ssh'
+          $DB_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyCommand="ssh -o StrictHostKeyChecking=no -W %h:%p -i ~/.ssh/az-vm-ssh gillani@$APP_IP"'
           EOF
 
           echo "Inventory written:"
