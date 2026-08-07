@@ -60,6 +60,18 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         continue-on-error: true
 
+      - name: Setup Terraform variables and SSH keys
+        run: |
+          # 1. Write terraform.tfvars from secret
+          echo "${{ secrets.TF_VARS_FILE }}" > terraform.tfvars
+
+          # 2. Extract public key from the private key secret
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" > ~/.ssh/az-vm-ssh
+          chmod 600 ~/.ssh/az-vm-ssh
+          ssh-keygen -y -f ~/.ssh/az-vm-ssh > ~/.ssh/az-vm-ssh.pub
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
       - name: Terraform Init
         id: init
         run: terraform init
@@ -90,6 +102,7 @@ jobs:
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           ARM_USE_OIDC: "true"
+          TF_VAR_ssh_public_key_path: "/home/runner/.ssh/az-vm-ssh.pub"
 
       # Post the plan output as a PR comment so reviewers can see what changes
       - name: Post Plan as PR Comment
@@ -161,6 +174,18 @@ jobs:
           terraform_version: "~1.10"
           terraform_wrapper: false # Disable wrapper so outputs are clean
 
+      - name: Setup Terraform variables and SSH keys
+        run: |
+          # 1. Write terraform.tfvars from secret
+          echo "${{ secrets.TF_VARS_FILE }}" > terraform.tfvars
+
+          # 2. Extract public key from the private key secret
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" > ~/.ssh/az-vm-ssh
+          chmod 600 ~/.ssh/az-vm-ssh
+          ssh-keygen -y -f ~/.ssh/az-vm-ssh > ~/.ssh/az-vm-ssh.pub
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
       - name: Terraform Init
         run: terraform init
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -178,6 +203,7 @@ jobs:
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           ARM_USE_OIDC: "true"
+          TF_VAR_ssh_public_key_path: "/home/runner/.ssh/az-vm-ssh.pub"
 
       # Capture outputs for Ansible step
       - name: Export Terraform outputs
