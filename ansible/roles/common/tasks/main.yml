@@ -18,16 +18,11 @@
       - git
       - unzip
       - ufw
-      - fail2ban
       - python3
       - python3-pip
     state: present
 
-- name: Ensure fail2ban is enabled and started
-  ansible.builtin.service:
-    name: fail2ban
-    state: started
-    enabled: yes
+
 
 - name: Set timezone to UTC
   community.general.timezone:

@@ -274,10 +274,10 @@ jobs:
           DB_IP="${{ steps.tf_outputs.outputs.db_ip }}"
           cat > ${{ env.ANSIBLE_WORKING_DIR }}/inventory/hosts.ini << EOF
           [app_servers]
-          $APP_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+          $APP_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o ServerAliveInterval=60 -o StrictHostKeyChecking=no'
 
           [db_servers]
-          $DB_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyCommand="ssh -o StrictHostKeyChecking=no -W %h:%p -i ~/.ssh/az-vm-ssh gillani@$APP_IP"'
+          $DB_IP ansible_user=gillani ansible_ssh_private_key_file=~/.ssh/az-vm-ssh ansible_ssh_common_args='-o ServerAliveInterval=60 -o StrictHostKeyChecking=no -o ProxyCommand="ssh -o ServerAliveInterval=60 -o StrictHostKeyChecking=no -W %h:%p -i ~/.ssh/az-vm-ssh gillani@$APP_IP"'
           EOF
 
       - name: Run Ansible site playbook
