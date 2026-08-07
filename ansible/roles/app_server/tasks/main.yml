@@ -10,7 +10,7 @@
   ansible.builtin.command:
     cmd: >
       az keyvault secret show
-      --vault-name kv-secrets-1029
+      --vault-name secrets-kv-1029
       --name {{ kv_secret_name_db_pass }}
       --query value -o tsv
   register: kv_secret_output
@@ -54,7 +54,7 @@
     repo: "{{ app_repo_url }}"
     dest: "{{ app_repo_dest }}"
     version: main
-    force: yes   # Always sync to latest main — safe because this is idempotent
+    force: yes # Always sync to latest main — safe because this is idempotent
   become_user: root
 
 # --- Add GitHub Actions deploy public key to authorized_keys ---
@@ -86,7 +86,7 @@
     owner: "{{ app_user }}"
     group: "{{ app_user }}"
     mode: "0640"
-  no_log: true   # Template contains db_password — suppress from logs
+  no_log: true # Template contains db_password — suppress from logs
   notify: Restart Apache
 
 # --- Import DB schema (idempotent — schema.sql uses IF NOT EXISTS) ---
@@ -104,7 +104,7 @@
           -p{{ db_password }}
           {{ db_name }} < {{ app_repo_dest }}/sql/schema.sql
   args:
-    creates: /var/log/taskflow-schema-imported.flag   # Only run once
+    creates: /var/log/taskflow-schema-imported.flag # Only run once
   register: schema_import
   no_log: true
 

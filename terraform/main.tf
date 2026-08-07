@@ -3,8 +3,8 @@
 # ---------------------------------------------------------------------------
 
 data "azurerm_key_vault" "kv" {
-  name                = "kv-secrets-1029"
-  resource_group_name = "rg-terraform-state"
+  name                = "secrets-kv-1029"
+  resource_group_name = "rg-bilal-gillani"
 }
 
 data "azurerm_key_vault_secret" "db_password" {

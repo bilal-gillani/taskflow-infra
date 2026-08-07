@@ -5,21 +5,18 @@
 # ---------------------------------------------------------------------------
 
 # --- App config ---
-app_repo_url: "https://github.com/bilal-gillani/taskflow-app-cicd.git" # NEW repo — separate from previous demo
+app_repo_url: "https://github.com/bilal-gillani/taskflow-app-cicd.git"
 app_repo_dest: "/var/www/html/taskflow"
 app_user: "www-data"
 
 # --- GitHub Actions deploy key ---
-# The private key goes into the DEPLOY_SSH_KEY GitHub Secret in the taskflow-app repo.
-github_deploy_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEhLr1IZq9SaYzZEJaRLlgLBCAZls4dfHaGYj0DLVLiV github-actions-deploy"
+github_deploy_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICYR+IxNvQ0ssUtcLdvPK1zqLSTgg2ykV2CRgkvJcoAQ github-actions-deploy"
 
 # --- Azure Key Vault ---
-# The Ansible controller (GitHub Actions runner) must be authenticated to Azure
-# (via OIDC / az login) to read secrets from Key Vault at playbook runtime.
-key_vault_uri: "https://kv-secrets-1029.vault.azure.net/"
+key_vault_uri: "https://secrets-kv-1029.vault.azure.net/"
 kv_secret_name_db_pass: "taskflow-db-pass"
 
 # --- DB config ---
 db_name: "taskflow"
 db_user: "taskflow_user"
-# db_password is fetched from Key Vault in each role — not stored here
+# db_password is fetched from Key Vault in each role

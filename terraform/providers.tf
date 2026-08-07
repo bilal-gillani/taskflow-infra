@@ -8,8 +8,8 @@ terraform {
 
   # Remote state in Azure Storage — same backend as demo project
   backend "azurerm" {
-    resource_group_name  = "rg-terraform-state"
-    storage_account_name = "sa0tfstate01029"
+    resource_group_name  = "rg-bilal-gillani"
+    storage_account_name = "stgtfstate1029"
     container_name       = "tfstate"
     key                  = "cicd-pipeline.terraform.tfstate"
   }
