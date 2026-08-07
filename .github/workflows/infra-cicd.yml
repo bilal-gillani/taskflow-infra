@@ -1,4 +1,4 @@
-name: Infrastructure CI/CD — Terraform + Ansible
+name: Infrastructure CI/CD - Terraform + Ansible
 
 # ---------------------------------------------------------------------------
 # Triggers:
@@ -64,9 +64,11 @@ jobs:
         continue-on-error: true
 
       - name: Setup Terraform variables and SSH keys
+        env:
+          TFVARS: ${{ secrets.TF_VARS_FILE }}
         run: |
-          # 1. Write terraform.tfvars from secret
-          echo "${{ secrets.TF_VARS_FILE }}" > terraform.tfvars
+          # 1. Write terraform.tfvars from secret safely using env var
+          echo "$TFVARS" > terraform.tfvars
 
           # 2. Extract public key from the private key secret
           mkdir -p ~/.ssh
@@ -178,9 +180,11 @@ jobs:
           terraform_wrapper: false # Disable wrapper so outputs are clean
 
       - name: Setup Terraform variables and SSH keys
+        env:
+          TFVARS: ${{ secrets.TF_VARS_FILE }}
         run: |
-          # 1. Write terraform.tfvars from secret
-          echo "${{ secrets.TF_VARS_FILE }}" > terraform.tfvars
+          # 1. Write terraform.tfvars from secret safely using env var
+          echo "$TFVARS" > terraform.tfvars
 
           # 2. Extract public key from the private key secret
           mkdir -p ~/.ssh

@@ -12,13 +12,13 @@ terraform {
     storage_account_name = "stgtfstate1029"
     container_name       = "tfstate"
     key                  = "cicd-pipeline.terraform.tfstate"
-    use_oidc             = true   # authenticate to backend via OIDC, not az CLI
+    use_oidc             = true # authenticate to backend via OIDC, not az CLI
   }
 }
 
 provider "azurerm" {
   features {}
-  use_oidc        = true   # authenticate via OIDC token, not az CLI session
+  use_oidc        = true # authenticate via OIDC token, not az CLI session
   tenant_id       = var.tenant_id
   subscription_id = var.subscription_id
 }
