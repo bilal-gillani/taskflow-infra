@@ -7,18 +7,21 @@ name: Infrastructure CI/CD — Terraform + Ansible
 # ---------------------------------------------------------------------------
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
     paths:
       - "terraform/**"
       - "ansible/**"
+      - ".github/workflows/**"
   pull_request:
     branches:
       - main
     paths:
       - "terraform/**"
       - "ansible/**"
+      - ".github/workflows/**"
 
 permissions:
   id-token: write # Required for OIDC authentication to Azure
