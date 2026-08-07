@@ -17,7 +17,7 @@ data "azurerm_key_vault_secret" "db_password" {
 # ---------------------------------------------------------------------------
 
 module "resource_group" {
-  source      = "../../../modules/rg"
+  source      = "../modules/rg"
   environment = var.environment
   location    = var.location
 }
@@ -27,7 +27,7 @@ module "resource_group" {
 # ---------------------------------------------------------------------------
 
 module "nsg_app" {
-  source              = "../../../modules/nsg"
+  source              = "../modules/nsg"
   environment         = "${var.environment}-app"
   location            = module.resource_group.location
   resource_group_name = module.resource_group.name
@@ -35,7 +35,7 @@ module "nsg_app" {
 }
 
 module "nsg_db" {
-  source              = "../../../modules/nsg"
+  source              = "../modules/nsg"
   environment         = "${var.environment}-db"
   location            = module.resource_group.location
   resource_group_name = module.resource_group.name
@@ -47,7 +47,7 @@ module "nsg_db" {
 # ---------------------------------------------------------------------------
 
 module "vnet" {
-  source                 = "../../../modules/vnet"
+  source                 = "../modules/vnet"
   environment            = var.environment
   location               = module.resource_group.location
   resource_group_name    = module.resource_group.name
