@@ -79,7 +79,7 @@
 # --- Generate config.php from template (injects db_host + secrets) ---
 - name: Get DB VM private IP from hostvars
   ansible.builtin.set_fact:
-    db_host: "{{ hostvars[groups['db_servers'][0]]['ansible_host'] }}"
+    db_host: "{{ hostvars[groups['db_servers'][0]]['ansible_host'] | default(groups['db_servers'][0]) }}"
 
 - name: Deploy config.php from Jinja2 template
   ansible.builtin.template:
