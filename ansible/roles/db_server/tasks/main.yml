@@ -51,14 +51,14 @@
 
 # --- Create database ---
 - name: Create taskflow database
-  community.mysql.mysql_db:
+  ansible.mysql.mysql_db:
     name: "{{ db_name }}"
     state: present
     login_unix_socket: /var/run/mysqld/mysqld.sock
 
 # --- Create application DB user ---
 - name: Create taskflow DB user with remote access
-  community.mysql.mysql_user:
+  ansible.mysql.mysql_user:
     name: "{{ db_user }}"
     password: "{{ db_password }}"
     priv: "{{ db_name }}.*:ALL"
@@ -68,6 +68,6 @@
   no_log: true
 
 - name: Flush MySQL privileges
-  community.mysql.mysql_query:
+  ansible.mysql.mysql_query:
     query: "FLUSH PRIVILEGES"
     login_unix_socket: /var/run/mysqld/mysqld.sock
