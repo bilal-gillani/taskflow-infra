@@ -16,6 +16,8 @@
   register: kv_secret_output
   changed_when: false
   no_log: true # Never print the secret to logs
+  delegate_to: localhost
+  become: false
 
 - name: Set db_password fact
   ansible.builtin.set_fact:
