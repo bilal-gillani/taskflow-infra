@@ -104,11 +104,9 @@
     delay: 5
 
 - name: Import database schema
-  ansible.builtin.shell: >
-    mysql -h {{ db_host }}
-          -u {{ db_user }}
-          -p{{ db_password }}
-          {{ db_name }} < {{ app_repo_dest }}/sql/schema.sql
+  ansible.builtin.shell: mysql -h {{ db_host }} -u {{ db_user }} {{ db_name }} < {{ app_repo_dest }}/sql/schema.sql
+  environment:
+    MYSQL_PWD: "{{ db_password }}"
   args:
     creates: /var/log/taskflow-schema-imported.flag # Only run once
   register: schema_import
